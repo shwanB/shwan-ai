@@ -1,16 +1,5 @@
 {
   "name": "shwan-ai",
-  "version": "3.0.0",
-  "description": "Shwan AI - Modern Kurdish AI Assistant with image, file, voice, and code debugging",
-  "main": "index.html",
-  "scripts": {
-    "build": "echo 'No build needed'",
-    "start": "vercel dev"
-  },
-  "keywords": ["ai", "kurdish", "sorani", "chatbot", "image-recognition", "voice"],
-  "author": "Shwan",
-  "license": "MIT",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  }
+  "version": "1.0.0",
+  "private": true
 }
