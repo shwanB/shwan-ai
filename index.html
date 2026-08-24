@@ -1,39 +1,31 @@
-<!DOCTYPE html>
-<html lang="ckb" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shwan AI</title>
-</head>
-<body style="background:#0f0c29; color:#fff; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;">
-    <div style="width:90%; max-width:600px; text-align:center;">
-        <h2>🤖 Shwan AI</h2>
-        <textarea id="prompt" rows="3" style="width:100%; padding:12px; border-radius:10px; border:none; font-size:16px;" placeholder="پرسیارەکەت بنووسە..."></textarea>
-        <br><br>
-        <button onclick="ask()" style="padding:12px 30px; background:#8b7cf7; color:#fff; border:none; border-radius:25px; cursor:pointer; font-size:16px;">ناردن</button>
-        <p id="result" style="margin-top:20px; font-size:18px; line-height:1.6;"></p>
-    </div>
-    <script>
-        async function ask() {
-            const prompt = document.getElementById('prompt').value;
-            const result = document.getElementById('result');
-            result.textContent = 'بیردەکەمەوە...';
-            try {
-                const res = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ prompt })
-                });
-                const data = await res.json();
-                if (data.response) {
-                    result.textContent = data.response;
-                } else {
-                    result.textContent = 'هەڵە: ' + JSON.stringify(data);
-                }
-            } catch (err) {
-                result.textContent = 'هەڵە: ' + err.message;
+<script>
+    async function ask() {
+        const prompt = document.getElementById('prompt').value;
+        const result = document.getElementById('result');
+        result.textContent = 'بیردەکەمەوە...';
+        
+        try {
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt })
+            });
+            
+            // پشکنینی status
+            if (!res.ok) {
+                const errorText = await res.text();
+                result.textContent = 'هەڵەی ڕاژە: ' + res.status + '\n' + errorText;
+                return;
             }
+            
+            const data = await res.json();
+            if (data.response) {
+                result.textContent = data.response;
+            } else {
+                result.textContent = 'هەڵە: ' + JSON.stringify(data);
+            }
+        } catch (err) {
+            result.textContent = 'هەڵەی چاوەڕواننەکراو: ' + err.message;
         }
-    </script>
-</body>
-</html>
+    }
+</script>
