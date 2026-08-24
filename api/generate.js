@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -17,14 +16,16 @@ export default async function handler(req, res) {
         دروستکەرەکەت شوانە، گەنجێکی زیرەک و داهێنەر لە دوز، کەلار.
         هەمیشە بە کوردی سۆرانی وەڵام بدەرەوە، دۆستانە بە، و هەندێک جار گاڵتەی خۆش بکە.`;
 
-        // بەکارهێنانی مۆدێلی gemini-flash-latest
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY is not set in Vercel' });
+        }
+
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [
                         {
@@ -43,31 +44,21 @@ export default async function handler(req, res) {
         );
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Gemini API error:', response.status, errorText);
-            return res.status(500).json({ 
-                error: 'Gemini API failed', 
-                details: errorText.substring(0, 500)
-            });
+            const errText = await response.text();
+            console.error('Gemini error:', response.status, errText);
+            return res.status(500).json({ error: 'Gemini failed', details: errText });
         }
 
         const data = await response.json();
-        
         let aiResponse = 'ببورە، وەڵام نەدۆزرایەوە.';
         if (data.candidates && data.candidates.length > 0) {
             aiResponse = data.candidates[0].content.parts[0].text.trim();
         }
 
-        return res.status(200).json({ 
-            response: aiResponse,
-            model: 'gemini-flash-latest'
-        });
+        return res.status(200).json({ response: aiResponse });
 
     } catch (error) {
         console.error('Handler error:', error);
-        return res.status(500).json({ 
-            error: 'Internal server error',
-            details: error.message
-        });
+        return res.status(500).json({ error: 'Internal error', details: error.message });
     }
 }
