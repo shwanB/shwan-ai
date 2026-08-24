@@ -64,7 +64,7 @@ export default async function handler(req, res) {
         // ====== خوێندنەوەی فایل ======
         let fileContent = '';
         if (file && file.content) {
-            fileContent = file.content.substring(0, 1500); // سنووردارکردن بۆ کارایی
+            fileContent = file.content.substring(0, 1500);
         }
 
         // ====== دروستکردنی کۆنترێکست ======
@@ -91,9 +91,10 @@ export default async function handler(req, res) {
 
         conversationContext += `\n\nUser: ${prompt}\n\nShwan AI:`;
 
-        // ====== بانگکردنی Hugging Face ======
-        const response = await fetch(
-            'https://api-inference.huggingface.co/models/microsoft/phi-2',
+        // ====== بانگکردنی Hugging Face (بە مۆدێلی خێراتر) ======
+        // مۆدێلی flan-t5-base بۆ وەڵامی خێرا و کوالیتی باش
+        const apiResponse = await fetch(
+            'https://api-inference.huggingface.co/models/google/flan-t5-base',
             {
                 method: 'POST',
                 headers: {
@@ -103,48 +104,49 @@ export default async function handler(req, res) {
                 body: JSON.stringify({
                     inputs: conversationContext,
                     parameters: {
-                        max_new_tokens: 300,
-                        temperature: 0.8,
+                        max_new_tokens: 250,
+                        temperature: 0.7,
                         top_p: 0.9,
                         do_sample: true,
-                        return_full_text: false,
-                        repetition_penalty: 1.2,
-                        no_repeat_ngram_size: 3
+                        return_full_text: false
                     }
                 })
             }
         );
 
-        if (!response.ok) {
-            const aiResponse = getFallbackResponse(prompt, imageDescription, fileContent);
+        if (!apiResponse.ok) {
+            console.error('Hugging Face API error:', apiResponse.status);
+            // بەکارهێنانی fallback زیرەک
+            const fallback = getSmartFallback(prompt, imageDescription, fileContent);
             return res.status(200).json({ 
-                response: aiResponse,
+                response: fallback,
                 model: 'fallback',
                 personality: 'shwan_ai',
                 creator: 'شوان'
             });
         }
 
-        const data = await response.json();
+        const data = await apiResponse.json();
         let aiResponse = data[0]?.generated_text || '';
+
         aiResponse = aiResponse.trim();
 
-        if (!aiResponse || aiResponse.length < 10) {
-            aiResponse = getFallbackResponse(prompt, imageDescription, fileContent);
+        if (!aiResponse || aiResponse.length < 5) {
+            aiResponse = getSmartFallback(prompt, imageDescription, fileContent);
         }
 
         return res.status(200).json({ 
             response: aiResponse,
-            model: 'phi-2',
+            model: 'flan-t5-base',
             personality: 'shwan_ai',
             creator: 'شوان'
         });
 
     } catch (error) {
-        console.error('Error:', error);
-        const aiResponse = getFallbackResponse(prompt);
+        console.error('Error in handler:', error);
+        const fallback = getSmartFallback(prompt, '', '');
         return res.status(200).json({ 
-            response: aiResponse,
+            response: fallback,
             model: 'fallback',
             personality: 'shwan_ai',
             creator: 'شوان'
@@ -177,33 +179,45 @@ async function analyzeImage(imageBase64) {
     }
 }
 
-// ====== وەڵامی fallback ======
-function getFallbackResponse(prompt, imageDescription = '', fileContent = '') {
-    if (prompt.includes('شوان مۆد') || prompt.includes('پەیامی شوان')) {
-        return `🌟 شوان مۆد چالاکە! 🌟\n\nپەیامی شوان بۆ تۆ:\n\n"هیچ شتێک مەحاڵ نییە، تەنها کات دەوێت.\nتۆ ببە بەخۆت و ڕێز لە کەسایەتی خۆت بگرە و کەس لە خۆت بە پیاوتر مەزانە."\n\n💪 ئەمڕۆ باشترین ڕۆژی ژیانتە!`;
-    }
+// ====== Fallback زیرەک ======
+function getSmartFallback(prompt, imageDescription = '', fileContent = '') {
+    const lowerPrompt = prompt.toLowerCase();
 
-    if (prompt.includes('کێ') && (prompt.includes('دروست') || prompt.includes('کردوویت'))) {
+    // پرسیار دەربارەی دروستکەر
+    if (lowerPrompt.includes('کێ') && (lowerPrompt.includes('دروست') || lowerPrompt.includes('کردوویت') || lowerPrompt.includes('کردویت'))) {
         return `من لەلایەن شوانەوە دروست کراوم! 😊\n\nشوان گەنجێکی زیرەک و داهێنەرە، خەڵکی دوز و دانیشتووی کەلار. تەمەنی ٣٥ ساڵە و حەز دەکات یارمەتی خەڵک بدات.\n\nپەیامەکەی بۆ تۆ: "هیچ شتێک مەحاڵ نییە، تەنها کات دەوێت. تۆ ببە بەخۆت و ڕێز لە کەسایەتی خۆت بگرە و کەس لە خۆت بە پیاوتر مەزانە." 💪`;
     }
 
-    if (prompt.includes('شوان')) {
-        return `شوان دروستکەری منە! 😊\n\nئەو  تەمەنی ٣٥ ساڵە و حەز دەکات یارمەتی خەڵک بدات.\n\nلە بەتاڵیدا کۆد دەنووسێت و وێنە دەکێشێت. ڕقی لە درۆ و دووڕوویی و ماستاوە! 😄\n\nپەیامەکەی: "هیچ شتێک مەحاڵ نییە، تەنها کات دەوێت."`;
+    // پرسیار دەربارەی شوان
+    if (lowerPrompt.includes('شوان')) {
+        return `شوان دروستکەری منە! 😊\n\nئەو گەنجێکی زیرەک و داهێنەرە لە دوز، ئێستا لە کەلار دەژیت. تەمەنی ٣٥ ساڵە و حەز دەکات یارمەتی خەڵک بدات.\n\nلە بەتاڵیدا کۆد دەنووسێت و وێنە دەکێشێت. ڕقی لە درۆ و دووڕوویی و ماستاوە! 😄\n\nپەیامەکەی: "هیچ شتێک مەحاڵ نییە، تەنها کات دەوێت."`;
     }
 
+    // شوان مۆد
+    if (lowerPrompt.includes('شوان مۆد') || lowerPrompt.includes('پەیامی شوان')) {
+        return `🌟 شوان مۆد چالاکە! 🌟\n\nپەیامی شوان بۆ تۆ:\n\n"هیچ شتێک مەحاڵ نییە، تەنها کات دەوێت.\nتۆ ببە بەخۆت و ڕێز لە کەسایەتی خۆت بگرە و کەس لە خۆت بە پیاوتر مەزانە."\n\n💪 ئەمڕۆ باشترین ڕۆژی ژیانتە!`;
+    }
+
+    // وێنە
     if (imageDescription) {
-        return `وێنەکەم بینی! 😊\n\nلە وێنەکەدا دەبینم: ${imageDescription}\n\nپرسیارەکەت: "${prompt}"\n\nوەڵام: بە پێی ئەوەی کە لە وێنەکەدا دەیبینم، دەتوانم بڵێم کە...`;
+        return `وێنەکەم بینی! 😊\n\nلە وێنەکەدا دەبینم: ${imageDescription}\n\nپرسیارەکەت: "${prompt}"\n\nوەڵام: بە پێی وێنەکە، پێم وایە کە...`;
     }
 
+    // فایل
     if (fileContent) {
         return `فایلەکەم خوێندەوە! 📄\n\nناوەڕۆکی فایلەکە: ${fileContent.substring(0, 200)}...\n\nپرسیارەکەت: "${prompt}"\n\nوەڵام: بە پێی ناوەڕۆکی فایلەکە، دەتوانم بڵێم کە...`;
     }
 
-    const responses = [
-        `گیانەکەم! 😊 پێش وەڵامدانەوە با پێت بڵێم کە من Shwan AI ـم، دروستکراوی شوانی زیرەک!\n\nدەربارەی پرسیارەکەت "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"، با بیر بکەمەوە...\n\nوەڵام: بە دڵنیاییەوە دەتوانم یارمەتیت بدەم. تکایە وردتر بپرسە بۆ ئەوەی وەڵامێکی باشترت بدەمەوە.`,
-        `سڵاو براکەم/خوشکەکەم! 😊\n\nمن Shwan AI ـم و شوان دروستی کردووم. ئەو دەڵێت "هیچ شتێک مەحاڵ نییە" و منیش هەوڵ دەدەم یارمەتیت بدەم.\n\nدەربارەی "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"، با بڵێم...`,
-        `هێی گیانەکەم! 💪\n\nپێش هەموو شتێک، شوان پەیامێکی بۆ تۆ هەیە: "تۆ ببە بەخۆت و ڕێز لە کەسایەتی خۆت بگرە."\n\nئێستا با وەڵامی پرسیارەکەت بدەمەوە...`
-    ];
+    // یارمەتی کۆد
+    if (lowerPrompt.includes('کۆد') || lowerPrompt.includes('کۆدە') || lowerPrompt.includes('پرۆگرام') || lowerPrompt.includes('هەڵە')) {
+        return `بۆ چارەسەری کێشەی کۆد، تکایە کۆدەکەت بنێرە و بڵێ چ هەڵەیەک دەدات. من هەوڵ دەدەم هەنگاو بە هەنگاو شیکاری بکەم و نمونەی دروستت بدەم. 😊`;
+    }
 
-    return responses[Math.floor(Math.random() * responses.length)];
+    // وەڵامی گشتی
+    const generalResponses = [
+        `گیانەکەم! 😊 دەربارەی "${prompt}" دەتوانم بڵێم کە شتێکی باشە! بەڵام بۆ وەڵامێکی وردتر، تکایە زیاتر ڕوونی بکەرەوە.`,
+        `من Shwan AI ـم و هەوڵ دەدەم یارمەتیت بدەم. پرسیارەکەت "${prompt}" بە بەهایە، بەڵام پێویستم بە زانیاری زیاترە.`,
+        `بە پێی زانیارییەکانم، دەتوانم بڵێم کە پرسیارەکەت زۆر گرنگە. تکایە وردتر بپرسە بۆ ئەوەی وەڵامێکی دروستت بدەمەوە.`
+    ];
+    return generalResponses[Math.floor(Math.random() * generalResponses.length)];
 }
